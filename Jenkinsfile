@@ -10,7 +10,7 @@ pipeline {
   agent any
   triggers { pollSCM('H/1 * * * *') }   // tự kiểm tra GitHub mỗi phút
   environment {
-    PROJECT  = 'devops-test'
+    PROJECT  = 'devops-test-vuong'
     BRANCH   = 'main'
     APP      = 'devops-test-web'
     SITE_URL = 'http://localhost:8081'
