@@ -15,22 +15,17 @@ pipeline {
     BRANCH      = 'main'
     SITE_URL    = 'https://devops-test-vuong.vercel.app'
     VERCEL_HOOK = 'https://api.vercel.com/v1/integrations/deploy/prj_AKrJIziA5G1E5qfXT0AM6rtiJxFc/my8LDAEnbU'
-    COMMIT_HASH = 'unknown'
   }
 
   stages {
-    stage('Checkout') {
+    stage('Checkout & Notify Start') {
       steps {
         checkout scm
         script {
-          env.COMMIT_HASH = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          def commit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          env.SHORT_COMMIT = commit
+          tg("🚀 Bắt đầu deploy website\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nCommit: ${commit}")
         }
-      }
-    }
-
-    stage('Notify Start') {
-      steps {
-        tg("🚀 Bắt đầu deploy website\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nCommit: ${COMMIT_HASH}")
       }
     }
 
@@ -64,10 +59,15 @@ pipeline {
 
   post {
     success {
-      tg("✅ Deploy thành công\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nWebsite: ${SITE_URL}")
+      script {
+        tg("✅ Deploy thành công\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nWebsite: ${SITE_URL}")
+      }
     }
     failure {
-      tg("❌ Deploy thất bại\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nCommit: ${COMMIT_HASH}\nError: Jenkins pipeline execution failed")
+      script {
+        def commit = env.SHORT_COMMIT ?: (env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'unknown')
+        tg("❌ Deploy thất bại\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nCommit: ${commit}\nError: Jenkins pipeline execution failed")
+      }
     }
   }
 }
