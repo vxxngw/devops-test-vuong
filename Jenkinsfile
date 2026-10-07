@@ -8,7 +8,7 @@ def tg(String msg) {
 
 pipeline {
   agent any
-  triggers { pollSCM('H/1 * * * *') }   // Tự động kiểm tra GitHub mỗi phút
+  triggers { pollSCM('* * * * *') }   // Tự động kiểm tra GitHub mỗi phút (chuẩn 60s)
 
   environment {
     REPO_NAME   = 'devops-test-vuong'
