@@ -8,65 +8,66 @@ def tg(String msg) {
 
 pipeline {
   agent any
-  triggers { pollSCM('H/1 * * * *') }   // tự kiểm tra GitHub mỗi phút
+  triggers { pollSCM('H/1 * * * *') }   // Tự động kiểm tra GitHub mỗi phút
+
   environment {
-    PROJECT  = 'devops-test-vuong_01'
-    BRANCH   = 'main'
-    APP      = 'devops-test-web'
-    SITE_URL = 'http://localhost:8081'
+    REPO_NAME   = 'devops-test-vuong'
+    BRANCH      = 'main'
+    SITE_URL    = 'https://devops-test-vuong.vercel.app'
+    VERCEL_HOOK = 'https://api.vercel.com/v1/integrations/deploy/prj_AKrJIziA5G1E5qfXT0AM6rtiJxFc/my8LDAEnbU'
+    COMMIT_HASH = 'unknown'
   }
 
   stages {
-    stage('Notify Start') {
-      steps { tg("🚀 DEPLOY STARTED\nProject: ${PROJECT}\nBranch: ${BRANCH}") }
-    }
     stage('Checkout') {
-      steps { checkout scm }
-    }
-    stage('Install Dependencies') {
       steps {
-        sh '''
-          if [ -f package.json ]; then
-            docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp \
-              -v "$WORKSPACE":/app -w /app node:20-alpine sh -c "npm ci || npm install"
-          else
-            echo "Static site - no dependencies"
-          fi
-        '''
+        checkout scm
+        script {
+          env.COMMIT_HASH = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        }
       }
     }
-    stage('Build') {
-      steps {
-        sh '''
-          if [ -f package.json ] && grep -q '"build"' package.json; then
-            docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp \
-              -v "$WORKSPACE":/app -w /app node:20-alpine npm run build
-            if [ -d dist ]; then OUT=dist; else OUT=build; fi
-          else
-            OUT=.
-          fi
-          test -f "$OUT/index.html" || { echo "ERROR: index.html not found in $OUT"; exit 1; }
 
-          echo "FROM nginx:alpine" > Dockerfile.web
-          echo "COPY $OUT/ /usr/share/nginx/html/" >> Dockerfile.web
-          echo ".git" > .dockerignore
-          echo "node_modules" >> .dockerignore
-          docker build -f Dockerfile.web -t $APP:latest .
+    stage('Notify Start') {
+      steps {
+        tg("🚀 Bắt đầu deploy website\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nCommit: ${COMMIT_HASH}")
+      }
+    }
+
+    stage('Build & Test') {
+      steps {
+        sh '''
+          echo "Kiểm tra mã nguồn..."
+          test -f index.html || { echo "ERROR: index.html không tồn tại"; exit 1; }
+          echo "Mã nguồn hợp lệ."
         '''
       }
     }
-    stage('Deploy') {
+
+    stage('Deploy to Vercel') {
       steps {
         sh '''
-          docker rm -f $APP || true
-          docker run -d --name $APP -p 8081:80 $APP:latest
+          echo "Gửi trigger deploy tới Vercel..."
+          RESPONSE=$(curl -s -X POST "$VERCEL_HOOK")
+          echo "Vercel Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q '"job"'; then
+            echo "Vercel deploy đã được kích hoạt thành công!"
+          else
+            echo "Lỗi khi kích hoạt Vercel deploy: $RESPONSE"
+            exit 1
+          fi
         '''
       }
     }
   }
 
   post {
-    success { tg("✅ DEPLOY SUCCESS\nProject: ${PROJECT}\nBranch: ${BRANCH}\nURL: ${SITE_URL}") }
-    failure { tg("❌ DEPLOY FAILED\nProject: ${PROJECT}\nBranch: ${BRANCH}\nPlease check Jenkins.") }
+    success {
+      tg("✅ Deploy thành công\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nWebsite: ${SITE_URL}")
+    }
+    failure {
+      tg("❌ Deploy thất bại\nRepository: ${REPO_NAME}\nBranch: ${BRANCH}\nCommit: ${COMMIT_HASH}\nError: Jenkins pipeline execution failed")
+    }
   }
 }
